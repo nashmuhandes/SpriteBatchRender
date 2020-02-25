@@ -43,7 +43,7 @@ import bpy
 import math
 import sys
 import time
-import mathutils as mu
+import signal
 
 from bpy.props import *
 
@@ -51,8 +51,8 @@ bl_info = \
 	{
 		"name" : "Sprite Batch Render",
 		"author" : "Pekka Väänänen <pekka.vaananen@iki.fi>",
-		"version" : (1, 2, 0),
-		"blender" : (2, 6, 0),
+		"version" : (1, 3, 0),
+		"blender" : (2, 80, 0),
 		"location" : "Render",
 		"description" :
 			"Renders the scene from multiple directions.",
@@ -64,20 +64,20 @@ bl_info = \
 
 
 class SpriteRenderSettings(bpy.types.PropertyGroup):
-	target = StringProperty (
+	target: StringProperty (
 		name = "Target object",
 		description = """The object to be rotated. Usually an Empty
 						with the actual models as children.""",
 		default = ""
 	)
 
-	spritename = StringProperty (
+	spritename: StringProperty (
 		name = "Sprite name",
 		description = """Name of sprite. Must be exactly 4 letters.""",
 		default = ""
 	)
 
-	path = StringProperty (
+	path: StringProperty (
 		name = "Sprite render path",
 		description = """Where to save the sprite frames.""",
 		default = "",
@@ -91,13 +91,18 @@ class SpriteRenderOperator(bpy.types.Operator):
 	bl_options = {'REGISTER'}
 
 	def execute(self, context):
+		#if frame_start is None:
+		frame_start = context.scene.frame_start
+		#if frame_end is None:
+		frame_end = context.scene.frame_end
+		
 		self.render(
 			context.scene,
 			context.scene.sprite_render.target,
 			context.scene.sprite_render.spritename,
 			context.scene.sprite_render.path,
-			context.scene.frame_start,
-			context.scene.frame_end
+			frame_start,
+			frame_end
 		)
 		return {'FINISHED'}
 
@@ -175,7 +180,6 @@ class SpriteRenderOperator(bpy.types.Operator):
 				obj.rotation_euler.z = orig_rotation - angle
 				print(obj.rotation_euler.z)
 
-				scene.update()
 				bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
 				# if no_rotation is true, force angle 0
@@ -236,7 +240,6 @@ class SpriteRenderOperator(bpy.types.Operator):
 				scene.render.filepath = filepath + sprite_string + subsprite_string + frame_string + angle_string
 				bpy.ops.render.render(animation=False, write_still=True)
 
-				#print ("%d:%s: %f,%f" % (f, angle_string, camera.location.x, camera.location.y))
 				count += 1
 
 		print ("Rendered %d shots" % (count))
@@ -261,32 +264,31 @@ class SpriteRenderPanel(bpy.types.Panel):
 				icon='OBJECT_DATA', text="Target object")
 
 		if props.target not in context.scene.objects:
-			l.column().label("Invalid target object '%s'!" % (props.target),
+			l.column().label(text = "Invalid target object '%s'!" % (props.target),
 			icon='ERROR')
 
 		l.row().prop(props, "spritename", text="Sprite name")
 
 		if len(context.scene.sprite_render.spritename) != 4:
-			l.column().label("Invalid sprite name!",
+			l.column().label(text = "Invalid sprite name!",
 			icon='ERROR')
 
 		l.row().prop(props, "path", text="Output path")
 		row = l.row()
 		row.operator("render.spriterender_operator", text="Render Batch", icon='RENDER_ANIMATION')
 
+classes = (SpriteRenderOperator, SpriteRenderPanel, SpriteRenderSettings)
 
 def register():
-	bpy.utils.register_class(SpriteRenderOperator)
-	bpy.utils.register_class(SpriteRenderPanel)
-	bpy.utils.register_class(SpriteRenderSettings)
+	for cls in classes:
+		bpy.utils.register_class(cls)
 
 	bpy.types.Scene.sprite_render = bpy.props.PointerProperty(type=SpriteRenderSettings)
 
 
 def unregister():
-	bpy.utils.unregister_class(SpriteRenderOperator)
-	bpy.utils.unregister_class(SpriteRenderPanel)
-	bpy.utils.unregister_class(SpriteRenderSettings)
+	for cls in reversed(classes):
+		bpy.utils.unregister_class(cls)
 	del bpy.types.Scene.sprite_render
 
 
